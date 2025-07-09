@@ -1,293 +1,260 @@
-import { useState, useCallback, useRef } from 'react';
-import PDFUpload from './PDFUpload';
-import FastPDFViewer from './FastPDFViewer';
-import FieldOverlay from './FieldOverlay';
+import React, { useState, useCallback, useEffect } from 'react';
+import Header from './Header';
+import ViewerArea from './ViewerArea';
 import FieldManager from './FieldManager';
-import { identifyFormFields } from '../utils/textExtraction';
-import { exportPDFWithFields, organizeFieldsByPage, validateFieldsForExport } from '../utils/pdfExport';
 
 const PDFEditor = () => {
-  // PDF state
-  const [pdfFile, setPdfFile] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState(null);
-  const [numPages, setNumPages] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [scale, setScale] = useState(1.0);
-  const [pageHeight, setPageHeight] = useState(0);
-
-  // Fields state
+  const [file, setFile] = useState(null);
+  const [fileUrl, setFileUrl] = useState(null);
   const [fields, setFields] = useState([]);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [autoDetectedFields, setAutoDetectedFields] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // UI state
-  const [isExporting, setIsExporting] = useState(false);
-  const [showFieldManager, setShowFieldManager] = useState(true);
-  const [notification, setNotification] = useState(null);
-
-  const containerRef = useRef(null);
-
-  // Handle PDF file selection
-  const handleFileSelect = useCallback(async (file, fileUrl) => {
-    setPdfFile(file);
-    setPdfUrl(fileUrl);
-    setCurrentPage(1);
-    setFields([]);
-    setAutoDetectedFields([]);
-    setNotification({ type: 'success', message: 'PDF loaded successfully!' });
-    setTimeout(() => setNotification(null), 3000);
-  }, []);
-
-  // Handle PDF load success
-  const handlePDFLoadSuccess = useCallback(({ numPages }) => {
-    setNumPages(numPages);
-  }, []);
-
-  // Handle text extraction from PDF
-  const handleTextExtracted = useCallback((pageNumber, textItems) => {
-    if (textItems.length === 0) return;
-
-    // Auto-detect form fields from extracted text
-    const detectedFields = identifyFormFields(textItems, 595, 842); // A4 dimensions
+  const handleFileSelect = useCallback(async (selectedFile) => {
+    if (!selectedFile) return;
     
-    // Add page number to detected fields
-    const fieldsWithPage = detectedFields.map(field => ({
-      ...field,
-      page: pageNumber
-    }));
-
-    setAutoDetectedFields(prev => {
-      const filtered = prev.filter(f => f.page !== pageNumber);
-      return [...filtered, ...fieldsWithPage];
-    });
-  }, []);
-
-  // Handle page change
-  const handlePageChange = useCallback((page, newScale) => {
-    if (newScale !== undefined) {
-      setScale(newScale);
-    } else {
-      setCurrentPage(page);
-    }
-  }, []);
-
-  // Field management functions
-  const handleAddField = useCallback((field) => {
-    setFields(prev => [...prev, field]);
-    setNotification({ type: 'success', message: 'Field added successfully!' });
-    setTimeout(() => setNotification(null), 2000);
-  }, []);
-
-  const handleUpdateField = useCallback((fieldId, updates) => {
-    setFields(prev => prev.map(field => 
-      field.id === fieldId ? { ...field, ...updates } : field
-    ));
-  }, []);
-
-  const handleDeleteField = useCallback((fieldId) => {
-    setFields(prev => prev.filter(field => field.id !== fieldId));
-    setNotification({ type: 'info', message: 'Field deleted' });
-    setTimeout(() => setNotification(null), 2000);
-  }, []);
-
-  // Auto-detect fields
-  const handleAutoDetectFields = useCallback(() => {
-    const newFields = autoDetectedFields.map(field => ({
-      ...field,
-      id: `auto_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    }));
+    setLoading(true);
+    setError(null);
     
-    setFields(prev => [...prev, ...newFields]);
-    setNotification({ 
-      type: 'success', 
-      message: `Added ${newFields.length} auto-detected fields!` 
-    });
-    setTimeout(() => setNotification(null), 3000);
-  }, [autoDetectedFields]);
-
-  // Export PDF
-  const handleExportPDF = useCallback(async () => {
-    if (!pdfFile || fields.length === 0) {
-      setNotification({ 
-        type: 'error', 
-        message: 'No PDF loaded or no fields to export' 
-      });
-      setTimeout(() => setNotification(null), 3000);
-      return;
-    }
-
-    // Validate fields
-    const validation = validateFieldsForExport(fields);
-    if (!validation.isValid) {
-      setNotification({ 
-        type: 'error', 
-        message: `Validation errors: ${validation.errors.join(', ')}` 
-      });
-      setTimeout(() => setNotification(null), 5000);
-      return;
-    }
-
-    if (validation.warnings.length > 0) {
-      console.warn('Export warnings:', validation.warnings);
-    }
-
-    setIsExporting(true);
     try {
-      const fieldsData = organizeFieldsByPage(fields);
-      await exportPDFWithFields(pdfFile, fieldsData, 'edited-document.pdf');
-      setNotification({ 
-        type: 'success', 
-        message: 'PDF exported successfully!' 
-      });
-    } catch (error) {
-      console.error('Export error:', error);
-      setNotification({ 
-        type: 'error', 
-        message: 'Failed to export PDF: ' + error.message 
-      });
-    } finally {
-      setIsExporting(false);
-      setTimeout(() => setNotification(null), 3000);
-    }
-  }, [pdfFile, fields]);
+      // Validate file
+      if (selectedFile.type !== 'application/pdf') {
+        throw new Error('Please select a PDF file');
+      }
+      
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        throw new Error('File size must be less than 10MB');
+      }
 
-  // Get current page fields
-  const currentPageFields = fields.filter(field => field.page === currentPage);
+      // Create URL for the file
+      const url = URL.createObjectURL(selectedFile);
+      
+      setFile(selectedFile);
+      setFileUrl(url);
+      setFields([]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    handleFileSelect(selectedFile);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files[0];
+    handleFileSelect(droppedFile);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const addField = (type) => {
+    const newField = {
+      id: Date.now(),
+      type,
+      x: 100,
+      y: 100,
+      width: type === 'checkbox' ? 20 : type === 'signature' ? 200 : 150,
+      height: type === 'textarea' ? 60 : type === 'signature' ? 50 : 30,
+      value: type === 'checkbox' ? false : '',
+      placeholder: type === 'signature' ? 'Sign your name here...' : `Enter ${type}...`
+    };
+    setFields(prev => [...prev, newField]);
+  };
+
+  const updateField = (id, updates) => {
+    setFields(prev => prev.map(field => 
+      field.id === id ? { ...field, ...updates } : field
+    ));
+  };
+
+  const deleteField = (id) => {
+    setFields(prev => prev.filter(field => field.id !== id));
+  };
+
+  const resetEditor = () => {
+    if (fileUrl) {
+      URL.revokeObjectURL(fileUrl);
+    }
+    setFile(null);
+    setFileUrl(null);
+    setFields([]);
+    setError(null);
+    setIsEditMode(false);
+  };
+
+  const exportPDF = async () => {
+    alert(`Export would include ${fields.length} fields with their values. This is a demo - full export functionality would use pdf-lib.`);
+  };
+
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      // Enter fullscreen for PDF area only
+      const pdfContainer = document.getElementById('pdf-container');
+      if (pdfContainer) {
+        if (pdfContainer.requestFullscreen) {
+          pdfContainer.requestFullscreen();
+        } else if (pdfContainer.webkitRequestFullscreen) {
+          pdfContainer.webkitRequestFullscreen();
+        } else if (pdfContainer.msRequestFullscreen) {
+          pdfContainer.msRequestFullscreen();
+        }
+        setIsFullscreen(true);
+      }
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
+  };
+
+  // Handle fullscreen change events
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+        setIsFullscreen(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Cleanup URL on unmount
+  useEffect(() => {
+    return () => {
+      if (fileUrl) {
+        URL.revokeObjectURL(fileUrl);
+      }
+    };
+  }, [fileUrl]);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">PDF Editor</h1>
-            {pdfFile && (
-              <p className="text-sm text-gray-600 mt-1">
-                {pdfFile.name} • {fields.length} field{fields.length !== 1 ? 's' : ''}
-              </p>
-            )}
-          </div>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Import Google Fonts and custom styles */}
+      <link
+        href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
 
-          <div className="flex items-center space-x-3">
-            {pdfFile && autoDetectedFields.length > 0 && (
-              <button
-                onClick={handleAutoDetectFields}
-                className="btn btn-outline btn-sm"
-              >
-                Auto-detect Fields ({autoDetectedFields.length})
-              </button>
-            )}
+      <style jsx>{`
+        #pdf-container:fullscreen {
+          background: black;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
 
-            {pdfFile && (
-              <button
-                onClick={() => setShowFieldManager(!showFieldManager)}
-                className="btn btn-outline btn-sm"
-              >
-                {showFieldManager ? 'Hide' : 'Show'} Fields
-              </button>
-            )}
+        #pdf-container:fullscreen iframe {
+          width: 100vw;
+          height: 100vh;
+          max-width: none;
+          max-height: none;
+          border: none;
+          border-radius: 0;
+        }
 
-            {pdfFile && fields.length > 0 && (
-              <button
-                onClick={handleExportPDF}
-                disabled={isExporting}
-                className="btn btn-primary btn-sm"
-              >
-                {isExporting ? (
-                  <>
-                    <span className="loading loading-spinner loading-sm"></span>
-                    Exporting...
-                  </>
-                ) : (
-                  'Export PDF'
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+        #pdf-container:-webkit-full-screen {
+          background: black;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
 
-      {/* Notification */}
-      {notification && (
-        <div className={`alert alert-${notification.type} mx-6 mt-4`}>
-          <span>{notification.message}</span>
-        </div>
-      )}
+        #pdf-container:-webkit-full-screen iframe {
+          width: 100vw;
+          height: 100vh;
+          max-width: none;
+          max-height: none;
+          border: none;
+          border-radius: 0;
+        }
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {!pdfFile ? (
-          /* Upload Screen */
-          <div className="flex-1 flex items-center justify-center">
-            <PDFUpload onFileSelect={handleFileSelect} />
-          </div>
-        ) : (
-          /* Editor Interface */
-          <>
-            {/* PDF Viewer Area */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <div 
-                ref={containerRef}
-                className="flex-1 overflow-auto bg-gray-100 p-6"
-              >
-                <div className="relative inline-block">
-                  <FastPDFViewer
-                    fileUrl={pdfUrl}
-                    onLoadSuccess={handlePDFLoadSuccess}
-                    selectedPage={currentPage}
-                    onPageChange={handlePageChange}
-                    scale={scale}
-                  />
-                  
-                  {/* Field Overlay */}
-                  <FieldOverlay
-                    fields={currentPageFields}
-                    onFieldUpdate={handleUpdateField}
-                    onFieldDelete={handleDeleteField}
-                    scale={scale}
-                    pageHeight={842} // A4 height in points
-                    isEditMode={isEditMode}
-                  />
-                </div>
-              </div>
-            </div>
+        /* Signature field styling */
+        .signature-field {
+          font-family: 'Dancing Script', 'Brush Script MT', cursive !important;
+          font-size: 20px !important;
+          font-weight: 500 !important;
+          color: #1a365d !important;
+          transform: rotate(-1deg) !important;
+          letter-spacing: 0.5px !important;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+        }
 
-            {/* Field Manager Sidebar */}
-            {showFieldManager && (
-              <FieldManager
-                fields={fields}
-                onAddField={handleAddField}
-                onUpdateField={handleUpdateField}
-                onDeleteField={handleDeleteField}
-                isEditMode={isEditMode}
-                onToggleEditMode={() => setIsEditMode(!isEditMode)}
-                currentPage={currentPage}
-                pageHeight={842}
-              />
-            )}
-          </>
-        )}
+        .signature-field::placeholder {
+          font-family: 'Dancing Script', cursive !important;
+          color: #94a3b8 !important;
+          font-style: italic !important;
+        }
+
+        /* Smooth transitions for signature fields */
+        .signature-field {
+          transition: all 0.2s ease-in-out !important;
+        }
+
+        .signature-field:focus {
+          transform: rotate(-1deg) scale(1.02) !important;
+          color: #0f172a !important;
+        }
+      `}</style>
+
+      <Header
+        file={file}
+        isEditMode={isEditMode}
+        setIsEditMode={setIsEditMode}
+        fields={fields}
+        exportPDF={exportPDF}
+        toggleFullscreen={toggleFullscreen}
+        isFullscreen={isFullscreen}
+        resetEditor={resetEditor}
+      />
+
+      <div className="flex h-screen">
+        <ViewerArea
+          file={file}
+          fileUrl={fileUrl}
+          fields={fields}
+          updateField={updateField}
+          deleteField={deleteField}
+          isEditMode={isEditMode}
+          isFullscreen={isFullscreen}
+          toggleFullscreen={toggleFullscreen}
+          handleFileSelect={handleFileSelect}
+          handleDrop={handleDrop}
+          handleDragOver={handleDragOver}
+          handleFileChange={handleFileChange}
+          loading={loading}
+          error={error}
+        />
+
+        <FieldManager
+          fields={fields}
+          addField={addField}
+          deleteField={deleteField}
+          isEditMode={isEditMode}
+        />
       </div>
-
-      {/* Footer */}
-      {pdfFile && (
-        <footer className="bg-white border-t border-gray-200 px-6 py-3">
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <div>
-              {numPages && (
-                <span>Page {currentPage} of {numPages}</span>
-              )}
-            </div>
-            <div className="flex items-center space-x-4">
-              <span>Zoom: {Math.round(scale * 100)}%</span>
-              <span>Fields: {fields.length}</span>
-              {isEditMode && (
-                <span className="text-blue-600 font-medium">Edit Mode Active</span>
-              )}
-            </div>
-          </div>
-        </footer>
-      )}
     </div>
   );
 };

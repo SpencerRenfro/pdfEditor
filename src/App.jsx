@@ -1,8 +1,8 @@
-import BasicPDFEditor from "./components/BasicPDFEditor";
+import PDFEditor from "./components/PDFEditor";
 import "./App.css";
 
 function App() {
-  return <BasicPDFEditor />;
+  return <PDFEditor />;
 }
 
 export default App;
