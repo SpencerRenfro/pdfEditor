@@ -1,13 +1,12 @@
 import { useState, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 
-// Set up PDF.js worker with fallback
+// Use a more reliable CDN for PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
-const PDFViewer = ({ 
+const FastPDFViewer = ({ 
   fileUrl, 
   onLoadSuccess, 
-  onTextExtracted, 
   selectedPage = 1,
   onPageChange,
   scale = 1.0 
@@ -15,7 +14,6 @@ const PDFViewer = ({
   const [numPages, setNumPages] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [pageTexts, setPageTexts] = useState({});
 
   const onDocumentLoadSuccess = useCallback(({ numPages }) => {
     setNumPages(numPages);
@@ -31,38 +29,6 @@ const PDFViewer = ({
     setLoading(false);
     console.error('PDF load error:', error);
   }, []);
-
-  const onPageLoadSuccess = useCallback(async (page) => {
-    try {
-      // Extract text content with positioning information
-      const textContent = await page.getTextContent();
-      const pageNumber = page.pageNumber;
-      
-      // Process text items to get positioning data
-      const textItems = textContent.items.map(item => ({
-        text: item.str,
-        x: item.transform[4],
-        y: item.transform[5],
-        width: item.width,
-        height: item.height,
-        fontName: item.fontName,
-        fontSize: item.transform[0]
-      }));
-
-      // Store text data for this page
-      setPageTexts(prev => ({
-        ...prev,
-        [pageNumber]: textItems
-      }));
-
-      // Notify parent component about extracted text
-      if (onTextExtracted) {
-        onTextExtracted(pageNumber, textItems);
-      }
-    } catch (error) {
-      console.error('Error extracting text from page:', error);
-    }
-  }, [onTextExtracted]);
 
   const handlePageChange = (direction) => {
     if (!numPages) return;
@@ -128,7 +94,6 @@ const PDFViewer = ({
           <Page
             pageNumber={selectedPage}
             scale={scale}
-            onLoadSuccess={onPageLoadSuccess}
             loading={
               <div className="flex items-center justify-center h-96">
                 <div className="loading loading-spinner loading-lg text-primary"></div>
@@ -230,4 +195,4 @@ const PDFViewer = ({
   );
 };
 
-export default PDFViewer;
+export default FastPDFViewer;

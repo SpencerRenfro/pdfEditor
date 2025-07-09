@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import PDFUpload from './PDFUpload';
-import PDFViewer from './PDFViewer';
+import FastPDFViewer from './FastPDFViewer';
 import FieldOverlay from './FieldOverlay';
 import FieldManager from './FieldManager';
 import { identifyFormFields } from '../utils/textExtraction';
@@ -160,7 +160,7 @@ const PDFEditor = () => {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">PDF Editor</h1>
+            <h1 className="text-3xl font-bold text-gray-900">PDF Editor</h1>
             {pdfFile && (
               <p className="text-sm text-gray-600 mt-1">
                 {pdfFile.name} • {fields.length} field{fields.length !== 1 ? 's' : ''}
@@ -231,10 +231,9 @@ const PDFEditor = () => {
                 className="flex-1 overflow-auto bg-gray-100 p-6"
               >
                 <div className="relative inline-block">
-                  <PDFViewer
+                  <FastPDFViewer
                     fileUrl={pdfUrl}
                     onLoadSuccess={handlePDFLoadSuccess}
-                    onTextExtracted={handleTextExtracted}
                     selectedPage={currentPage}
                     onPageChange={handlePageChange}
                     scale={scale}
