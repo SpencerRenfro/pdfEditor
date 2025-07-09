@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Toolbar with Fullscreen</title>
+    <style>
+        #toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+            padding: 8px 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        #start, #center, #end {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .vertical-separator {
+            width: 1px;
+            height: 24px;
+            background: #ddd;
+            margin: 0 8px;
+        }
+
+        cr-icon-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        cr-icon-button:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        #zoom-controls input {
+            width: 60px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 4px;
+            margin: 0 4px;
+        }
+
+        /* Fullscreen styles */
+        .fullscreen-container {
+            position: relative;
+        }
+
+        .fullscreen-container.is-fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            background: white;
+        }
+
+        .fullscreen-container.is-fullscreen #toolbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10000;
+        }
+
+        /* Hide fullscreen button when already in fullscreen */
+        .fullscreen-container.is-fullscreen #fullscreen {
+            display: none;
+        }
+
+        /* Show exit fullscreen button only when in fullscreen */
+        #exitFullscreen {
+            display: none;
+        }
+
+        .fullscreen-container.is-fullscreen #exitFullscreen {
+            display: inline-flex;
+        }
+    </style>
+</head>
+<body>
+    <div class="fullscreen-container" id="fullscreenContainer">
+        <div id="toolbar">
+            <div id="start">
+                <cr-icon-button id="sidenavToggle" title="Menu" aria-label="Menu" aria-expanded="true" role="button" tabindex="0" aria-disabled="false">
+                    ☰
+                </cr-icon-button>
+                <span id="title">VA Form 20-0996</span>
+            </div>
+            <div id="center">
+                <viewer-page-selector style="--page-length-digits: 1;">
+                    Page 1 of 1
+                </viewer-page-selector>
+                <span class="vertical-separator"></span>
+                <span id="zoom-controls">
+                    <cr-icon-button title="Zoom out" aria-label="Zoom out" role="button" tabindex="0" aria-disabled="false">
+                        −
+                    </cr-icon-button>
+                    <input type="text" value="100%" aria-label="Zoom level">
+                    <cr-icon-button title="Zoom in" aria-label="Zoom in" role="button" tabindex="0" aria-disabled="false">
+                        +
+                    </cr-icon-button>
+                </span>
+                <span class="vertical-separator"></span>
+                <cr-icon-button id="fit" title="Fit to page" aria-label="Fit to page" role="button" tabindex="0" aria-disabled="false">
+                    ⛶
+                </cr-icon-button>
+                <cr-icon-button id="rotate" title="Rotate counterclockwise" aria-label="Rotate counterclockwise" role="button" tabindex="0" aria-disabled="false">
+                    ↻
+                </cr-icon-button>
+            </div>
+            <div id="end">
+                <!-- Add fullscreen button here -->
+                <cr-icon-button id="fullscreen" title="Enter fullscreen" aria-label="Enter fullscreen" role="button" tabindex="0" aria-disabled="false">
+                    ⛶
+                </cr-icon-button>
+                <!-- Exit fullscreen button (hidden by default) -->
+                <cr-icon-button id="exitFullscreen" title="Exit fullscreen" aria-label="Exit fullscreen" role="button" tabindex="0" aria-disabled="false">
+                    ⛶
+                </cr-icon-button>
+                <span class="vertical-separator"></span>
+                <viewer-download-controls id="downloads">
+                    ⬇
+                </viewer-download-controls>
+                <cr-icon-button id="print" title="Print" aria-label="Print" role="button" tabindex="0" aria-disabled="false">
+                    🖨
+                </cr-icon-button>
+                <cr-icon-button id="more" title="More actions" aria-label="More actions" role="button" tabindex="0" aria-disabled="false">
+                    ⋮
+                </cr-icon-button>
+            </div>
+        </div>
+        
+        <!-- PDF content would go here -->
+        <div style="padding: 20px; height: 500px; background: #f9f9f9; display: flex; align-items: center; justify-content: center;">
+            <p>PDF Content Area - Click fullscreen button to test</p>
+        </div>
+    </div>
+
+    <script>
+        // Fullscreen functionality
+        const fullscreenContainer = document.getElementById('fullscreenContainer');
+        const fullscreenBtn = document.getElementById('fullscreen');
+        const exitFullscreenBtn = document.getElementById('exitFullscreen');
+
+        function enterFullscreen() {
+            if (fullscreenContainer.requestFullscreen) {
+                fullscreenContainer.requestFullscreen();
+            } else if (fullscreenContainer.webkitRequestFullscreen) {
+                fullscreenContainer.webkitRequestFullscreen();
+            } else if (fullscreenContainer.msRequestFullscreen) {
+                fullscreenContainer.msRequestFullscreen();
+            }
+            fullscreenContainer.classList.add('is-fullscreen');
+        }
+
+        function exitFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+            fullscreenContainer.classList.remove('is-fullscreen');
+        }
+
+        // Event listeners
+        fullscreenBtn.addEventListener('click', enterFullscreen);
+        exitFullscreenBtn.addEventListener('click', exitFullscreen);
+
+        // Listen for fullscreen changes (when user presses Escape)
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                fullscreenContainer.classList.remove('is-fullscreen');
+            }
+        });
+
+        document.addEventListener('webkitfullscreenchange', () => {
+            if (!document.webkitFullscreenElement) {
+                fullscreenContainer.classList.remove('is-fullscreen');
+            }
+        });
+
+        // Keyboard shortcut (F11 or F)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'F11' || (e.key === 'f' && e.ctrlKey)) {
+                e.preventDefault();
+                if (fullscreenContainer.classList.contains('is-fullscreen')) {
+                    exitFullscreen();
+                } else {
+                    enterFullscreen();
+                }
+            }
+            
+            // Escape key to exit fullscreen
+            if (e.key === 'Escape' && fullscreenContainer.classList.contains('is-fullscreen')) {
+                exitFullscreen();
+            }
+        });
+    </script>
+</body>
+</html>

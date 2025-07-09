@@ -10,4 +10,13 @@ export default defineConfig({
     open: true,
     host: true, // Listen on all addresses
   },
+  optimizeDeps: {
+    include: ['pdfjs-dist']
+  },
+  assetsInclude: ['**/*.worker.js'],
+  build: {
+    rollupOptions: {
+      external: [],
+    },
+  },
 })
