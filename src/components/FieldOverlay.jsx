@@ -1,294 +1,205 @@
-import { useState, useRef, useEffect } from 'react';
+import React from 'react';
 
-const FieldOverlay = ({ 
-  fields, 
-  onFieldUpdate, 
-  onFieldDelete, 
-  scale = 1.0,
-  pageHeight,
-  isEditMode = false 
-}) => {
-  const [selectedField, setSelectedField] = useState(null);
-  const [draggedField, setDraggedField] = useState(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+const FieldOverlay = ({ fields, updateField, deleteField, isEditMode }) => {
+  const handleFieldDrag = (e, fieldId) => {
+    if (!isEditMode) return;
 
-  const handleFieldChange = (fieldId, value) => {
-    if (onFieldUpdate) {
-      onFieldUpdate(fieldId, { value });
-    }
-  };
+    e.preventDefault();
+    e.stopPropagation();
 
-  const handleFieldClick = (field, event) => {
-    if (isEditMode) {
-      event.stopPropagation();
-      setSelectedField(field.id);
-    }
-  };
+    const field = fields.find(f => f.id === fieldId);
+    const fieldElement = e.currentTarget;
+    const containerElement = fieldElement.parentElement;
+    const containerRect = containerElement.getBoundingClientRect();
 
-  const handleFieldDoubleClick = (field, event) => {
-    if (isEditMode) {
-      event.stopPropagation();
-      // Focus the input for editing
-      const input = event.target.querySelector('input, textarea');
-      if (input) {
-        input.focus();
-      }
-    }
-  };
+    // Calculate initial offset from mouse to field's top-left corner
+    const initialOffsetX = e.clientX - (containerRect.left + field.x);
+    const initialOffsetY = e.clientY - (containerRect.top + field.y);
 
-  const handleMouseDown = (field, event) => {
-    if (isEditMode && event.button === 0) { // Left mouse button
-      setDraggedField(field.id);
-      const rect = event.currentTarget.getBoundingClientRect();
-      setDragOffset({
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top
+    // Add visual feedback
+    fieldElement.style.opacity = '0.8';
+    fieldElement.style.transform = 'scale(1.02)';
+    fieldElement.style.zIndex = '30';
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent) => {
+      moveEvent.preventDefault();
+
+      // Calculate new position relative to container
+      const newX = moveEvent.clientX - containerRect.left - initialOffsetX;
+      const newY = moveEvent.clientY - containerRect.top - initialOffsetY;
+
+      // Constrain to container bounds
+      const maxX = containerRect.width - field.width;
+      const maxY = containerRect.height - field.height;
+
+      updateField(fieldId, {
+        x: Math.max(0, Math.min(maxX, newX)),
+        y: Math.max(0, Math.min(maxY, newY))
       });
-      event.preventDefault();
-    }
+    };
+
+    const handleMouseUp = () => {
+      // Remove visual feedback
+      fieldElement.style.opacity = '';
+      fieldElement.style.transform = '';
+      fieldElement.style.zIndex = '';
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   };
 
-  const handleMouseMove = (event) => {
-    if (draggedField && isEditMode) {
-      const container = event.currentTarget.getBoundingClientRect();
-      const newX = (event.clientX - container.left - dragOffset.x) / scale;
-      const newY = (event.clientY - container.top - dragOffset.y) / scale;
+  const handleFieldResize = (e, fieldId, direction) => {
+    if (!isEditMode) return;
+    
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const field = fields.find(f => f.id === fieldId);
+    const startWidth = field.width;
+    const startHeight = field.height;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
       
-      if (onFieldUpdate) {
-        onFieldUpdate(draggedField, { 
-          x: Math.max(0, newX),
-          y: Math.max(0, newY)
-        });
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+
+      if (direction.includes('right')) {
+        newWidth = Math.max(50, startWidth + deltaX);
       }
-    }
-  };
-
-  const handleMouseUp = () => {
-    setDraggedField(null);
-    setDragOffset({ x: 0, y: 0 });
-  };
-
-  const handleKeyDown = (event) => {
-    if (isEditMode && selectedField && event.key === 'Delete') {
-      if (onFieldDelete) {
-        onFieldDelete(selectedField);
+      if (direction.includes('bottom')) {
+        newHeight = Math.max(20, startHeight + deltaY);
       }
-      setSelectedField(null);
-    }
-  };
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [selectedField, isEditMode]);
-
-  const renderField = (field) => {
-    const isSelected = selectedField === field.id;
-    const isDragging = draggedField === field.id;
-
-    const fieldStyle = {
-      position: 'absolute',
-      left: `${field.x * scale}px`,
-      top: `${(pageHeight - field.y - field.height) * scale}px`,
-      width: `${field.width * scale}px`,
-      height: `${field.height * scale}px`,
-      zIndex: isDragging ? 1000 : isSelected ? 100 : 10,
-      cursor: isEditMode ? 'move' : 'default'
+      
+      updateField(fieldId, { width: newWidth, height: newHeight });
     };
 
-    const inputStyle = {
-      width: '100%',
-      height: '100%',
-      border: isEditMode ? '2px solid #3b82f6' : '1px solid #d1d5db',
-      borderRadius: '4px',
-      padding: '2px 6px',
-      fontSize: `${12 * scale}px`,
-      backgroundColor: isEditMode ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255, 255, 255, 0.9)',
-      outline: 'none',
-      resize: 'none'
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
     };
 
-    if (isSelected && isEditMode) {
-      inputStyle.boxShadow = '0 0 0 2px #3b82f6';
-    }
-
-    switch (field.type) {
-      case 'text':
-      case 'email':
-      case 'tel':
-        return (
-          <div
-            key={field.id}
-            style={fieldStyle}
-            onClick={(e) => handleFieldClick(field, e)}
-            onDoubleClick={(e) => handleFieldDoubleClick(field, e)}
-            onMouseDown={(e) => handleMouseDown(field, e)}
-          >
-            <input
-              type={field.type}
-              value={field.value || ''}
-              placeholder={field.placeholder}
-              onChange={(e) => handleFieldChange(field.id, e.target.value)}
-              style={inputStyle}
-              disabled={isEditMode}
-            />
-            {isSelected && isEditMode && (
-              <div className="absolute -top-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                {field.label || field.type}
-              </div>
-            )}
-          </div>
-        );
-
-      case 'date':
-        return (
-          <div
-            key={field.id}
-            style={fieldStyle}
-            onClick={(e) => handleFieldClick(field, e)}
-            onDoubleClick={(e) => handleFieldDoubleClick(field, e)}
-            onMouseDown={(e) => handleMouseDown(field, e)}
-          >
-            <input
-              type="date"
-              value={field.value || ''}
-              onChange={(e) => handleFieldChange(field.id, e.target.value)}
-              style={inputStyle}
-              disabled={isEditMode}
-            />
-            {isSelected && isEditMode && (
-              <div className="absolute -top-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                Date Field
-              </div>
-            )}
-          </div>
-        );
-
-      case 'checkbox':
-        return (
-          <div
-            key={field.id}
-            style={fieldStyle}
-            onClick={(e) => handleFieldClick(field, e)}
-            onMouseDown={(e) => handleMouseDown(field, e)}
-          >
-            <label className="flex items-center h-full cursor-pointer">
-              <input
-                type="checkbox"
-                checked={field.value || false}
-                onChange={(e) => handleFieldChange(field.id, e.target.checked)}
-                className="checkbox checkbox-sm"
-                disabled={isEditMode}
-              />
-              {field.label && (
-                <span 
-                  className="ml-2 text-sm"
-                  style={{ fontSize: `${12 * scale}px` }}
-                >
-                  {field.label}
-                </span>
-              )}
-            </label>
-            {isSelected && isEditMode && (
-              <div className="absolute -top-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                Checkbox
-              </div>
-            )}
-          </div>
-        );
-
-      case 'signature':
-        return (
-          <div
-            key={field.id}
-            style={fieldStyle}
-            onClick={(e) => handleFieldClick(field, e)}
-            onMouseDown={(e) => handleMouseDown(field, e)}
-          >
-            <div
-              style={{
-                ...inputStyle,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: isEditMode ? 'move' : 'pointer',
-                fontStyle: 'italic',
-                color: field.value ? '#000' : '#666'
-              }}
-              onClick={() => !isEditMode && handleSignatureClick(field.id)}
-            >
-              {field.value || 'Click to sign'}
-            </div>
-            {isSelected && isEditMode && (
-              <div className="absolute -top-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                Signature Field
-              </div>
-            )}
-          </div>
-        );
-
-      case 'textarea':
-        return (
-          <div
-            key={field.id}
-            style={fieldStyle}
-            onClick={(e) => handleFieldClick(field, e)}
-            onDoubleClick={(e) => handleFieldDoubleClick(field, e)}
-            onMouseDown={(e) => handleMouseDown(field, e)}
-          >
-            <textarea
-              value={field.value || ''}
-              placeholder={field.placeholder}
-              onChange={(e) => handleFieldChange(field.id, e.target.value)}
-              style={inputStyle}
-              disabled={isEditMode}
-            />
-            {isSelected && isEditMode && (
-              <div className="absolute -top-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                Text Area
-              </div>
-            )}
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  const handleSignatureClick = (fieldId) => {
-    // Simple signature implementation - in a real app, you'd use a signature pad
-    const signature = prompt('Enter your signature:');
-    if (signature) {
-      handleFieldChange(fieldId, signature);
-    }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   };
 
   return (
-    <div
-      className="absolute inset-0 pointer-events-none"
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      style={{ pointerEvents: isEditMode || fields.length > 0 ? 'auto' : 'none' }}
-    >
-      {fields.map(renderField)}
-      
-      {isEditMode && selectedField && (
-        <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg border z-50">
-          <h3 className="font-semibold mb-2">Field Properties</h3>
-          <div className="space-y-2">
-            <button
-              onClick={() => onFieldDelete && onFieldDelete(selectedField)}
-              className="btn btn-sm btn-error"
+    <>
+      {fields.map(field => (
+        <div
+          key={field.id}
+          className={`absolute border-2 bg-white rounded shadow-sm transition-all group ${
+            isEditMode
+              ? 'border-blue-400 hover:border-blue-600 hover:shadow-md'
+              : 'border-gray-300'
+          }`}
+          style={{
+            left: `${field.x}px`,
+            top: `${field.y}px`,
+            width: `${field.width}px`,
+            height: `${field.height}px`,
+            zIndex: 20
+          }}
+        >
+          {/* Drag Handle - Only visible in edit mode */}
+          {isEditMode && (
+            <div
+              className="absolute -top-6 left-0 right-0 h-6 bg-blue-500 text-white text-xs px-2 py-1 rounded-t cursor-grab active:cursor-grabbing flex items-center justify-between"
+              onMouseDown={(e) => handleFieldDrag(e, field.id)}
             >
-              Delete Field
-            </button>
+              <span>{field.type}</span>
+              <span className="text-xs">⋮⋮</span>
+            </div>
+          )}
+          {/* Field Content Container */}
+          <div
+            className={`w-full h-full relative ${isEditMode ? 'cursor-move' : ''}`}
+            onMouseDown={(e) => {
+              // Only allow dragging if clicking on empty space, not on input elements
+              if (isEditMode && e.target === e.currentTarget) {
+                handleFieldDrag(e, field.id);
+              }
+            }}
+          >
+            {/* Field Content */}
+            {field.type === 'checkbox' ? (
+              <input
+                type="checkbox"
+                checked={field.value}
+                onChange={e => updateField(field.id, { value: e.target.checked })}
+                className="w-full h-full cursor-pointer"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : field.type === 'textarea' ? (
+              <textarea
+                value={field.value}
+                onChange={e => updateField(field.id, { value: e.target.value })}
+                placeholder={field.placeholder}
+                className="w-full h-full p-2 text-sm border-none outline-none resize-none cursor-text bg-transparent"
+                style={{
+                  fontFamily: field.type === 'signature' ? 'cursive' : 'inherit',
+                  fontSize: field.type === 'signature' ? '18px' : '14px'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <input
+                type={field.type === 'email' ? 'email' : field.type === 'date' ? 'date' : 'text'}
+                value={field.value}
+                onChange={e => updateField(field.id, { value: e.target.value })}
+                placeholder={field.placeholder}
+                className={`w-full h-full p-2 text-sm border-none outline-none cursor-text bg-transparent ${
+                  field.type === 'signature' ? 'signature-field' : ''
+                }`}
+                style={{
+                  fontFamily: field.type === 'signature' ? '"Dancing Script", "Brush Script MT", cursive' : 'inherit',
+                  fontSize: field.type === 'signature' ? '20px' : '14px',
+                  fontWeight: field.type === 'signature' ? '500' : 'normal',
+                  color: field.type === 'signature' ? '#1a365d' : 'inherit',
+                  transform: field.type === 'signature' ? 'rotate(-1deg)' : 'none',
+                  letterSpacing: field.type === 'signature' ? '0.5px' : 'normal'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
           </div>
+
+          {/* Delete Button */}
+          {isEditMode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteField(field.id);
+              }}
+              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold hover:bg-red-600 transition-colors flex items-center justify-center"
+              title="Delete field"
+            >
+              ×
+            </button>
+          )}
+
+          {/* Resize Handle */}
+          {isEditMode && (
+            <div
+              className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 cursor-se-resize"
+              onMouseDown={(e) => handleFieldResize(e, field.id, 'bottom-right')}
+              title="Resize field"
+            />
+          )}
+
+
         </div>
-      )}
-    </div>
+      ))}
+    </>
   );
 };
 
